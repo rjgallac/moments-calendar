@@ -2,6 +2,8 @@ const fs = require('fs');
 const readline = require('readline');
 const {google} = require('googleapis');
 
+var authen;
+
 // If modifying these scopes, delete token.json.
 const SCOPES = ['https://www.googleapis.com/auth/calendar.readonly'];
 // The file token.json stores the user's access and refresh tokens, and is
@@ -13,7 +15,18 @@ const TOKEN_PATH = 'token.json';
 fs.readFile('credentials.json', (err, content) => {
   if (err) return console.log('Error loading client secret file:', err);
   // Authorize a client with credentials, then call the Google Calendar API.
-  authorize(JSON.parse(content), getBookable);  
+  authorize(JSON.parse(content))
+  .then(auth =>{
+    authen = auth
+    return getBookable(auth);
+  })
+  .then(bookableSlots => {
+    console.log(bookableSlots)
+    getBooked(authen)
+    .then(bookedData =>{
+      console.log(bookedData);
+    })
+  });  
 });
 
 /**
@@ -23,16 +36,19 @@ fs.readFile('credentials.json', (err, content) => {
  * @param {function} callback The callback to call with the authorized client.
  */
 function authorize(credentials, callback) {
-  const {client_secret, client_id, redirect_uris} = credentials.installed;
-  const oAuth2Client = new google.auth.OAuth2(
-      client_id, client_secret, redirect_uris[0]);
-
-  // Check if we have previously stored a token.
-  fs.readFile(TOKEN_PATH, (err, token) => {
-    if (err) return getAccessToken(oAuth2Client, callback);
-    oAuth2Client.setCredentials(JSON.parse(token));
-    callback(oAuth2Client);
+  return new Promise((resolve, reject) => {
+    const {client_secret, client_id, redirect_uris} = credentials.installed;
+    const oAuth2Client = new google.auth.OAuth2(
+        client_id, client_secret, redirect_uris[0]);
+  
+    // Check if we have previously stored a token.
+    fs.readFile(TOKEN_PATH, (err, token) => {
+      if (err) return reject(getAccessToken(oAuth2Client, callback));
+      oAuth2Client.setCredentials(JSON.parse(token));
+      resolve(oAuth2Client);
+    });
   });
+  
 }
 
 /**
@@ -71,30 +87,41 @@ function getAccessToken(oAuth2Client, callback) {
  * @param {google.auth.OAuth2} auth An authorized OAuth2 client.
  */
 function getBookable(auth) {
-  const calendar = google.calendar({version: 'v3', auth});
-  calendar.events.list({
-    calendarId: 's6pcf6q5u4jevd2a4f8ctc6m94@group.calendar.google.com',
-    timeMin: (new Date()).toISOString(),
-    maxResults: 50,
-    singleEvents: true,
-    orderBy: 'startTime',
-  }, (err, res) => {
-    if (err) return console.log('The API returned an error: ' + err);
-    const events = res.data.items;
-    if (events.length) {
-      console.log('Upcoming 10 events:');
-      events.map((event, i) => {
-        //   console.log(event)
-        const start = event.start.dateTime || event.start.date;
-        console.log(`${start} - ${event.summary}`);
-      });
-    } else {
-      console.log('No upcoming events found.');
-    }
-  });
+  return new Promise((resolve, reject) => {
+
+    const calendar = google.calendar({version: 'v3', auth});
+    calendar.events.list({
+      calendarId: 's6pcf6q5u4jevd2a4f8ctc6m94@group.calendar.google.com',
+      timeMin: (new Date()).toISOString(),
+      maxResults: 50,
+      singleEvents: true,
+      orderBy: 'startTime',
+    }, (err, res) => {
+      if (err) return reject();
+      var bookableSlots = [];
+      const events = res.data.items;
+      if (events.length) {
+        // console.log('Upcoming 10 events:');
+        events.map((event, i) => {
+          //   console.log(event)
+          const start = event.start.dateTime || event.start.date;
+          // console.log(`${start} - ${event.summary}`);
+          bookableSlots.push({'start':event.start.dateTime, 'end': event.end.dateTime})
+         
+        });
+        resolve(bookableSlots);
+      } else {
+        console.log('No upcoming events found.');
+      }
+    });
+
+  })
+  
 }
 
 function getBooked(auth) {
+  return new Promise((resolve, reject) => {
+    var bookedSlots = [];
     const calendar = google.calendar({version: 'v3', auth});
     calendar.events.list({
       calendarId: 'rltrvkru5so57skps3j876dscs@group.calendar.google.com',
@@ -103,17 +130,21 @@ function getBooked(auth) {
       singleEvents: true,
       orderBy: 'startTime',
     }, (err, res) => {
-      if (err) return console.log('The API returned an error: ' + err);
+      if (err) return reject();
       const events = res.data.items;
       if (events.length) {
-        console.log('Upcoming 10 events:');
+        // console.log('Upcoming 10 events:');
         events.map((event, i) => {
-          //   console.log(event)
+            // console.log(event)
           const start = event.start.dateTime || event.start.date;
-          console.log(`${start} - ${event.summary}`);
+          bookedSlots.push({'start':event.start.dateTime, 'end': event.end.dateTime})  
         });
+        
+        resolve(bookedSlots)
       } else {
         console.log('No upcoming events found.');
       }
     });
-  }
+  })
+    
+}
