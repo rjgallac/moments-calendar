@@ -1,15 +1,16 @@
 const {bookableSlotConfig, bookedSlotConfig} = require('./config.js')
 const {google} = require('googleapis');
 
-/**
- * Lists the next 10 events on the user's primary calendar.
- * @param {google.auth.OAuth2} auth An authorized OAuth2 client.
- */
+
 function getBookable(auth) {
   return new Promise((resolve, reject) => {
     const calendar = google.calendar({version: 'v3', auth});
+    bookableSlotConfig.auth = auth;
     calendar.events.list(bookableSlotConfig, (err, res) => {
-      if (err) return reject();
+      if (err){
+        console.log(err);
+        return reject();
+      }
       var bookableSlots = [];
       const events = res.data.items;
       if (events.length) {
@@ -30,7 +31,10 @@ function getBooked(auth) {
     var bookedSlots = [];
     const calendar = google.calendar({version: 'v3', auth});
     calendar.events.list(bookedSlotConfig, (err, res) => {
-      if (err) return reject();
+      if (err){
+        console.log(err)
+        return reject();
+      } 
       const events = res.data.items;
       if (events.length) {
         events.map((event, i) => {
